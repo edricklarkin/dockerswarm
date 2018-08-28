@@ -1,0 +1,110 @@
+version: '3.3'
+
+networks:
+  http_network:
+    driver: overlay
+    external: true
+  mail_network:
+    driver: overlay
+  
+volumes:
+  mail_data:
+  maria_db:
+  redis_db:
+  certs:
+    external: true
+
+services:
+  mailserver:
+    image: hardware/mailserver:1.1-stable
+    deploy:
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.hostname == mail
+      labels:
+        - traefik.enable=true
+        - traefik.frontend.rule=Host:spam.${DOMAIN}
+        - traefik.port=11334
+        - traefik.docker.network=http_network
+        - traefik.frontend.redirect.entryPoint=https
+    ports:
+      - "25:25"       # SMTP                - Required
+    # - "110:110"     # POP3       STARTTLS - Optional - For webmails/desktop clients
+      - "143:143"     # IMAP       STARTTLS - Optional - For webmails/desktop clients
+    # - "465:465"     # SMTPS      SSL/TLS  - Optional - Enabled for compatibility reason, otherwise disabled
+      - "587:587"     # Submission STARTTLS - Optional - For webmails/desktop clients
+      - "993:993"     # IMAPS      SSL/TLS  - Optional - For webmails/desktop clients
+    # - "995:995"     # POP3S      SSL/TLS  - Optional - For webmails/desktop clients
+      - "4190:4190"   # SIEVE      STARTTLS - Optional - Recommended for mail filtering
+    env_file: /mnt/mailserver/mailserver.env
+    volumes:
+      - mail_data:/var/mail
+      - certs:/etc/letsencrypt/
+    depends_on:
+      - mariadb
+      - redis
+    networks:
+      - mail_network
+      - http_network
+
+  # Administration interface
+  # https://github.com/hardware/postfixadmin
+  # http://postfixadmin.sourceforge.net/
+  # Configuration : https://github.com/hardware/mailserver/wiki/Postfixadmin-initial-configuration
+  postfixadmin:
+    image: hardware/postfixadmin
+    deploy:
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.hostname != mail
+      labels:
+        - traefik.enable=true
+        - traefik.frontend.rule=Host:postfixadmin.${DOMAIN}
+        - traefik.port=8888
+        - traefik.docker.network=http_network
+        - traefik.frontend.redirect.entryPoint=https
+    env_file: /mnt/mailserver/mailserver.env
+    depends_on:
+      - mailserver
+      - mariadb
+    networks:
+      - mail_network
+      - http_network
+
+  # Database
+  # https://github.com/docker-library/mariadb
+  # https://mariadb.org/
+  mariadb:
+    image: mariadb:10.2
+    deploy:
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.hostname != mail 
+    env_file: /mnt/mailserver/mailserver.env
+    volumes:
+      - maria_db:/var/lib/mysql
+    networks:
+      - mail_network
+
+  # Database
+  # https://github.com/docker-library/redis
+  # https://redis.io/
+  redis:
+    image: redis:4.0-alpine
+    deploy:
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.hostname != mail
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_db:/data
+    networks:
+      - mail_network

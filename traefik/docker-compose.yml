@@ -1,0 +1,53 @@
+version: '3.3'
+
+services:
+  proxy:
+    image: traefik:latest
+    networks:
+      - http_network
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.domain=${DOMAIN}
+        - traefik.frontend.rule=Host:traefik.${DOMAIN}
+        - traefik.port=8080
+        - traefik.docker.network=http_network
+        - traefik.frontend.redirect.entryPoint=https
+      placement:
+        constraints:
+          - node.role == manager
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - certs:/etc/letsencrypt
+    configs:
+    - source: traefik_toml
+      target: /etc/traefik/traefik.toml
+    secrets:
+      - source: private-key
+        target: /certs/private_key.key
+      - source: public-key
+        target: /certs/public_key.cer
+
+networks:
+  http_network:
+    driver: overlay
+    external: true
+
+configs:
+  traefik_toml:
+    file: /mnt/traefik/traefik.toml
+
+volumes:
+  certs:
+    external: true
+
+secrets:
+  private-key:
+    external: true
+  public-key:
+    external: true
+

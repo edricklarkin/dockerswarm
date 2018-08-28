@@ -1,0 +1,31 @@
+defaultEntryPoints = ["https","http"]
+
+[api]
+entryPoint = "traefik"
+dashboard = true
+
+[entryPoints]
+  [entryPoints.http]
+  address = ":80"
+  [entryPoints.https]
+  address = ":443"
+    [entryPoints.https.tls]
+      [[entryPoints.https.tls.certificates]]
+      certFile = "/certs/public_key.cer"
+      keyFile = "/certs/private_key.key"
+
+  [entryPoints.traefik]
+  address = ":8080"
+
+# Default Traefik password is 12345
+# Change this password with HTPassword
+# https://www.web2generators.com/apache-tools/htpasswd-generator
+  [entryPoints.traefik.auth.basic]
+  users = ["user:$apr1$tmvyb4fs$ite9SeGG33KH5aoA037w50"]
+
+[docker]
+endpoint = "unix:///var/run/docker.sock"
+watch = true
+exposedbydefault = false
+swarmMode = true
+
